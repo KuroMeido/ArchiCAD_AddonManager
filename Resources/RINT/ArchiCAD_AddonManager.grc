@@ -1,0 +1,14 @@
+'STR#' 32000 "Add-on Name and Description" {
+/* [  1] */		"Add-in Manager"
+/* [  2] */		"Load, reload and run command DLLs without restarting Archicad"
+}
+
+'STR#' 32500 "Menu: Manual Mode" {
+/* [   ] */		"Add-in Manager"
+/* [  1] */		"Add-in Manager (Manual Mode)..."
+}
+
+'STR#' 32501 "Menu: Faceless Mode" {
+/* [   ] */		"Add-in Manager"
+/* [  1] */		"Add-in Manager (Faceless: run last command)"
+}

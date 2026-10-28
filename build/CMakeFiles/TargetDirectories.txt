@@ -1,0 +1,3 @@
+C:/huyenntt/13.pyKuro/pyArchiCAD/ArchiCAD_AddonManager/build/CMakeFiles/AddOn.dir
+C:/huyenntt/13.pyKuro/pyArchiCAD/ArchiCAD_AddonManager/build/CMakeFiles/edit_cache.dir
+C:/huyenntt/13.pyKuro/pyArchiCAD/ArchiCAD_AddonManager/build/CMakeFiles/rebuild_cache.dir

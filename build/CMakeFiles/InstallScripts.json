@@ -1,0 +1,11 @@
+{
+	"Configs" : 
+	[
+		"Debug-AC27"
+	],
+	"InstallScripts" : 
+	[
+		"C:/huyenntt/13.pyKuro/pyArchiCAD/ArchiCAD_AddonManager/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

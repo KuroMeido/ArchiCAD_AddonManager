@@ -1,0 +1,8 @@
+# ninja log v6
+18	301	8148569408922782	CMakeFiles/AddOn.dir/Release-AC27/Src/Lib/Helper/AddonManagerDialog.cpp.obj	25a0cb02fadf3510
+23	677	8148588599081780	CMakeFiles/AddOn.dir/Release-AC27/Src/Panels/Panel_Manager.cpp.obj	c7c4f50ef261d4e
+11	600	8148588598960052	CMakeFiles/AddOn.dir/Release-AC27/Src/App/AddOn.cpp.obj	dddd96177640c13d
+22	574	8148569408954230	CMakeFiles/AddOn.dir/Release-AC27/Src/Lib/Helper/ArchicadHostHelper.cpp.obj	8ac7f1a136b8cb9b
+12	531	8148569408856375	CMakeFiles/AddOn.dir/Release-AC27/Src/Lib/Execute/CommandLoader.cpp.obj	c73c89f3ed265811
+677	1534	8148588605612160	C:/huyenntt/13.pyKuro/pyArchiCAD/out/Release-AC27/ArchiCAD_AddonManager_AC27.apx	19bdcf87155dcec2
+677	1534	8148588605612160	Release-AC27/ArchiCAD_AddonManager_AC27.lib	19bdcf87155dcec2

@@ -1,0 +1,4 @@
+#include "DGDefs.h"
+
+#include "ArchiCAD_AddonManager.grc.rc2"
+#include "ArchiCAD_AddonManagerFix.grc.rc2"
