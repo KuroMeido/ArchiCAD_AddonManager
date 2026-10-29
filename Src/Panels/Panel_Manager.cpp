@@ -14,7 +14,7 @@ namespace Panels {
 
 namespace {
 
-	// The last DLL + command, kept in %APPDATA%\AddonManager\AddonManager.ini so Faceless mode survives a restart.
+	// The last add-on / DLL + command, kept in %APPDATA%\AddonManager\AddonManager.ini so Faceless mode survives a restart.
 	std::wstring IniPath ()
 	{
 		wchar_t dir[MAX_PATH] = {};
@@ -37,35 +37,19 @@ namespace {
 		WritePrivateProfileStringW (L"Last", key, value.c_str (), IniPath ().c_str ());
 	}
 
-	// Tool names are ASCII. (wchar_t is an unsigned short typedef in this build: explicit casts.)
-	std::wstring Widen (const std::string& s)
-	{
-		std::wstring w;
-		for (char c : s)
-			w += static_cast<wchar_t> (static_cast<unsigned char> (c));
-		return w;
-	}
-
-	std::string Narrow (const std::wstring& s)
-	{
-		std::string n;
-		for (wchar_t c : s)
-			n += static_cast<char> (c);
-		return n;
-	}
-
 	void Remember (const AddonManagerDialog::Selection& sel)
 	{
-		WriteSetting (L"Dll", sel.dllPath);
-		WriteSetting (L"Command", Widen (sel.toolName));
+		WriteSetting (L"Path", sel.path);
+		WriteSetting (L"Command", sel.command);
 	}
 
 	AddonManagerDialog::Selection LoadLast ()
 	{
 		AddonManagerDialog::Selection sel;
-		sel.dllPath = ReadSetting (L"Dll");
-		const std::wstring cmd = ReadSetting (L"Command");
-		sel.toolName = Narrow (cmd);
+		sel.path = ReadSetting (L"Path");
+		if (sel.path.empty ())
+			sel.path = ReadSetting (L"Dll");	// written by the first versions
+		sel.command = ReadSetting (L"Command");
 		return sel;
 	}
 
@@ -76,18 +60,18 @@ namespace {
 		if (!AddonManagerDialog::Show (sel))
 			return;
 		Remember (sel);
-		AddonManager::CommandLoader::RunFrom (sel.dllPath, sel.toolName.c_str ());
+		CommandLoader::Run (sel.path, sel.command);
 	}
 
-	// Faceless mode: the last command again, no manager window.
+	// Faceless mode: the last command again (fresh copy of the add-on / DLL), no manager window.
 	void RunFaceless ()
 	{
 		const AddonManagerDialog::Selection sel = LoadLast ();
-		if (ReadSetting (L"Command").empty ()) {
+		if (sel.path.empty () || sel.command.empty ()) {
 			ACAPI_WriteReport ("Add-in Manager: nothing to repeat yet. Run a command in Manual Mode first.", true);
 			return;
 		}
-		AddonManager::CommandLoader::RunFrom (sel.dllPath, sel.toolName.c_str ());
+		CommandLoader::Run (sel.path, sel.command);
 	}
 
 } // namespace

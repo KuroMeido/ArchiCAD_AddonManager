@@ -8,14 +8,32 @@
 namespace AddonManager {
 namespace CommandLoader {
 
-	// Loads a temporary copy of a Commands DLL (the original stays rebuildable while Archicad runs), hands it
-	// the Archicad function table, runs the command registered under `toolName`, unloads it.
-	// Returns a GSErrCode (0 = NoError).
-	int RunFrom (const std::wstring& dllPath, const char* toolName);
+	// Something the manager can run. key: "menu:<STR# id>:<item index>" (a menu item of an add-on) or
+	// "run:<tool name>" (RunCommand of a Commands DLL); a key without prefix is a tool name.
+	struct Command {
+		std::wstring	key;
+		std::wstring	label;
+	};
 
-	// Tool names of a DLL through its optional ListCommands export. Returns false (and a reason in `error`)
-	// when the DLL cannot be loaded; true with an empty list when it has no ListCommands.
-	bool ListCommands (const std::wstring& dllPath, std::vector<std::string>& names, std::wstring& error);
+	struct ModuleInfo {
+		std::wstring			name;			// from the add-on's CheckEnvironment
+		std::wstring			description;
+		std::wstring			kind;
+		std::vector<Command>	commands;
+	};
+
+	// Loads a temporary copy of an add-on (.apx) or of a Commands DLL, with the content of its folder (DLLs, data
+	// files, subfolders; not other add-ons nor build leftovers, at most 300 MB), so the original
+	// stays rebuildable while Archicad runs. An add-on runs under the manager's identity: its CheckEnvironment,
+	// RegisterInterface and Initialize run, its menu handlers are kept instead of being installed in Archicad.
+	// The module stays loaded until the next load (windows or callbacks it left behind stay valid).
+	bool	Inspect (const std::wstring& path, ModuleInfo& info, std::wstring& error);
+
+	// Fresh copy of `path`, then runs `key`. Returns a GSErrCode (0 = NoError); errors are reported in Archicad.
+	int		Run (const std::wstring& path, const std::wstring& key);
+
+	// Unloads the module of the last Inspect / Run (call from FreeData).
+	void	UnloadAll ();
 
 } // namespace CommandLoader
 } // namespace AddonManager

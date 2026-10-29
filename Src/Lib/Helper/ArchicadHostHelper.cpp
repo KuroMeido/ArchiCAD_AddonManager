@@ -37,6 +37,8 @@ struct Context {
 	int							drawingCacheLayout = -1;
 	GS::Array<API_Guid>			placedDrawings;		// drawings created by PlaceViewOnLayout
 	API_DatabaseUnId			placedLayoutDb = {};
+	GS::Array<API_Guid>			selection;			// selection of the open layout (Copy Views)
+	GS::Array<int>				selectionTypes;		// API_ElemTypeID of each selected element
 	GS::UniString				diagnostics;
 	int							dumpedItems = 0;
 };
@@ -918,6 +920,254 @@ namespace {
 			});
 		}
 
+		// ---- Copy Views ----
+
+		// Looks the GUID text up among the selection snapshot and the drawings of the cached layout
+		bool ResolveGuid (const Context& c, const GS::UniString& text, API_Guid& guid)
+		{
+			for (const API_Guid& g : c.selection)
+				if (APIGuidToString (g) == text) {
+					guid = g;
+					return true;
+				}
+			for (const API_Guid& g : c.drawingCache)
+				if (APIGuidToString (g) == text) {
+					guid = g;
+					return true;
+				}
+			return false;
+		}
+
+		// Selection of the layout that is open. layoutIndex = position in the layout list; returns the number of selected elements, -1 = no layout open.
+		int __cdecl GetSelectionCount (void* ctx, int* layoutIndex)
+		{
+			Context* c = C (ctx);
+			c->selection.Clear ();
+			c->selectionTypes.Clear ();
+			*layoutIndex = -1;
+
+			API_DatabaseInfo current = {};
+			if (ACAPI_Database_GetCurrentDatabase (&current) == NoError && current.typeID == APIWind_LayoutID) {
+				RefreshLayoutBook (*c);
+				for (UIndex i = 0; i < c->layouts.GetSize (); ++i)
+					if (c->layouts[i].dbId == current.databaseUnId)
+						*layoutIndex = static_cast<int> (i);
+			}
+
+			API_SelectionInfo selInfo = {};
+			GS::Array<API_Neig> selNeigs;
+			const GSErrCode err = ACAPI_Selection_Get (&selInfo, &selNeigs, false);
+			BMKillHandle (reinterpret_cast<GSHandle*> (&selInfo.marquee.coords));
+			if (err != NoError && err != APIERR_NOSEL)
+				return -1;
+
+			for (const API_Neig& neig : selNeigs) {
+				API_Elem_Head head = {};
+				head.guid = neig.guid;
+				if (ACAPI_Element_GetHeader (&head) != NoError)
+					continue;
+				c->selection.Push (neig.guid);
+				c->selectionTypes.Push (static_cast<int> (head.type.typeID));
+			}
+			return static_cast<int> (c->selection.GetSize ());
+		}
+
+		int __cdecl GetSelectionItem (void* ctx, int index, wchar_t* guid, int guidCap, int* typeId)
+		{
+			Context* c = C (ctx);
+			if (index < 0 || index >= static_cast<int> (c->selection.GetSize ()))
+				return APIERR_BADINDEX;
+			CopyOut (APIGuidToString (c->selection[index]), guid, guidCap);
+			*typeId = c->selectionTypes[index];
+			return 0;
+		}
+
+		int __cdecl FindDrawingIndex (void* ctx, int layoutIndex, const wchar_t* guid)
+		{
+			Context* c = C (ctx);
+			if (!LoadDrawings (*c, layoutIndex))
+				return -1;
+			const GS::UniString wanted = ToUni (guid);
+			for (UIndex i = 0; i < c->drawingCache.GetSize (); ++i)
+				if (APIGuidToString (c->drawingCache[i]) == wanted)
+					return static_cast<int> (i);
+			return -1;
+		}
+
+		// Creates a copy of element `guid` (found on srcLayout) on dstLayout: the whole element and its memo, so a drawing keeps its view link,
+		// scale, rotation, anchor and frame, and everything stays at the same position on the sheet.
+		int __cdecl CopyElementToLayout (void* ctx, int srcLayoutIndex, const wchar_t* guid, int dstLayoutIndex)
+		{
+			Context* c = C (ctx);
+			const int layoutCount = static_cast<int> (c->layouts.GetSize ());
+			if (srcLayoutIndex < 0 || srcLayoutIndex >= layoutCount || dstLayoutIndex < 0 || dstLayoutIndex >= layoutCount || dstLayoutIndex == srcLayoutIndex)
+				return APIERR_BADPARS;
+			if (c->drawingCacheLayout != srcLayoutIndex)
+				LoadDrawings (*c, srcLayoutIndex);
+			API_Guid srcGuid = APINULLGuid;
+			if (!ResolveGuid (*c, ToUni (guid), srcGuid))
+				return APIERR_BADID;
+
+			API_Element source = {};
+			API_ElementMemo memo = {};
+			API_Guid linkedView = APINULLGuid;		// navigator item a drawing shows (its content is not in the element itself)
+			{
+				LayoutScope scope (c->layouts[srcLayoutIndex].dbId);
+				if (!scope.switched)
+					return APIERR_BADDATABASE;
+				source.header.guid = srcGuid;
+				GSErrCode err = ACAPI_Element_Get (&source);
+				if (err != NoError)
+					return err;
+				if (source.header.type.typeID == API_DrawingID) {
+					API_DrawingLinkInfo link = {};
+					const GSErrCode linkErr = ACAPI_Drawing_GetDrawingLink (&srcGuid, &link);
+					c->diagnostics += GS::UniString::Printf ("CopyElementToLayout: source drawing link error %d, link type %d, link guid %s, drawingGuid %s.\n",
+						linkErr, static_cast<int> (link.linkTypeID), APIGuidToString (link.linkGuid).ToCStr ().Get (), APIGuidToString (source.drawing.drawingGuid).ToCStr ().Get ());
+					if (linkErr == NoError) {
+						if (link.linkGuid != APINULLGuid)
+							linkedView = link.linkGuid;
+						if (link.linkPath != nullptr)
+							delete link.linkPath;
+					}
+				}
+				err = ACAPI_Element_GetMemo (srcGuid, &memo, source.header.type.typeID == API_DrawingID ? APIMemoMask_Polygon : APIMemoMask_All);
+				if (err != NoError) {
+					ACAPI_DisposeElemMemoHdls (&memo);
+					return err;
+				}
+			}
+
+			GSErrCode result = NoError;
+			{
+				LayoutScope scope (c->layouts[dstLayoutIndex].dbId);
+				if (!scope.switched) {
+					ACAPI_DisposeElemMemoHdls (&memo);
+					return APIERR_BADDATABASE;
+				}
+				API_Guid created = APINULLGuid;
+				result = ACAPI_CallUndoableCommand ("Copy to layout", [&] () -> GSErrCode {
+					API_Element element = {};
+					element.header.type = source.header.type;
+					GSErrCode e = ACAPI_Element_GetDefaults (&element, nullptr);
+					if (e != NoError)
+						return e;
+					if (source.header.type.typeID == API_DrawingID) {
+						element.drawing = source.drawing;
+						element.header.guid = APINULLGuid;
+						if (linkedView != APINULLGuid)
+							element.drawing.drawingGuid = linkedView;
+					} else {
+						element = source;
+						element.header.guid = APINULLGuid;
+					}
+					e = ACAPI_Element_Create (&element, &memo);
+					if (e == NoError)
+						created = element.header.guid;
+					return e;
+				});
+				if (result == NoError && created != APINULLGuid && source.header.type.typeID == API_DrawingID) {
+					GS::Array<API_Guid> toUpdate;
+					toUpdate.Push (created);
+					const GSErrCode upd = ACAPI_Drawing_Update_Drawings (toUpdate);
+					if (upd != NoError)
+						c->diagnostics += GS::UniString::Printf ("CopyElementToLayout: Update_Drawings error %d.\n", upd);
+				}
+			}
+			ACAPI_DisposeElemMemoHdls (&memo);
+			return result;
+		}
+		// ---- Element access in any window ----
+
+		// First parameter named `name` of a library-part element's memo, nullptr when there is none
+		API_AddParType* FindStringParam (API_ElementMemo& memo, const char* name)
+		{
+			if (memo.params == nullptr)
+				return nullptr;
+			const Int32 count = static_cast<Int32> (BMGetHandleSize (reinterpret_cast<GSHandle> (memo.params)) / sizeof (API_AddParType));
+			for (Int32 i = 0; i < count; ++i) {
+				API_AddParType& p = (*memo.params)[i];
+				if (p.typeID == APIParT_CString && std::strcmp (p.name, name) == 0)
+					return &p;
+			}
+			return nullptr;
+		}
+
+		int __cdecl GetElementPlacement (void* ctx, const wchar_t* guid, double* v)
+		{
+			Context* c = C (ctx);
+			API_Guid g = APINULLGuid;
+			if (!ResolveGuid (*c, ToUni (guid), g))
+				return APIERR_BADID;
+			API_Element el = {};
+			el.header.guid = g;
+			const GSErrCode err = ACAPI_Element_Get (&el);
+			if (err != NoError)
+				return err;
+			if (el.header.type.typeID != API_ObjectID && el.header.type.typeID != API_LampID)
+				return APIERR_BADPARS;
+			v[0] = el.object.pos.x;
+			v[1] = el.object.pos.y;
+			v[2] = el.object.angle;
+			return 0;
+		}
+
+		int __cdecl GetElementTextParam (void* ctx, const wchar_t* guid, const wchar_t* name, wchar_t* value, int cap)
+		{
+			Context* c = C (ctx);
+			API_Guid g = APINULLGuid;
+			if (!ResolveGuid (*c, ToUni (guid), g))
+				return APIERR_BADID;
+			API_ElementMemo memo = {};
+			GSErrCode err = ACAPI_Element_GetMemo (g, &memo, APIMemoMask_AddPars);
+			if (err != NoError) {
+				ACAPI_DisposeElemMemoHdls (&memo);
+				return err;
+			}
+			const API_AddParType* p = FindStringParam (memo, ToUni (name).ToCStr (CC_UTF8).Get ());
+			if (p == nullptr) {
+				ACAPI_DisposeElemMemoHdls (&memo);
+				return APIERR_BADPARS;
+			}
+			CopyOut (GS::UniString (p->value.uStr), value, cap);
+			ACAPI_DisposeElemMemoHdls (&memo);
+			return 0;
+		}
+
+		int __cdecl SetElementTextParams (void* ctx, int count, const wchar_t* const* guids, const wchar_t* const* names, const wchar_t* const* values)
+		{
+			Context* c = C (ctx);
+			return ACAPI_CallUndoableCommand ("Change text parameters", [&] () -> GSErrCode {
+				for (int i = 0; i < count; ++i) {
+					API_Guid g = APINULLGuid;
+					if (!ResolveGuid (*c, ToUni (guids[i]), g))
+						return APIERR_BADID;
+					API_Element element = {};
+					element.header.guid = g;
+					GSErrCode e = ACAPI_Element_Get (&element);
+					if (e != NoError)
+						return e;
+					API_ElementMemo memo = {};
+					e = ACAPI_Element_GetMemo (g, &memo, APIMemoMask_AddPars);
+					if (e == NoError) {
+						API_AddParType* p = FindStringParam (memo, ToUni (names[i]).ToCStr (CC_UTF8).Get ());
+						if (p == nullptr) {
+							e = APIERR_BADPARS;
+						} else {
+							memset (p->value.uStr, 0, sizeof (p->value.uStr));
+							GS::ucsncpy (p->value.uStr, ToUni (values[i]).ToUStr ().Get (), API_UAddParStrLen - 1);
+							API_Element mask = {};
+							ACAPI_ELEMENT_MASK_CLEAR (mask);
+							e = ACAPI_Element_Change (&element, &mask, &memo, APIMemoMask_AddPars, true);
+						}
+					}
+					ACAPI_DisposeElemMemoHdls (&memo);
+					if (e != NoError)
+						return e;
+				}
+				return NoError;
+			});
+		}
 		int __cdecl RenameLayout (void* ctx, int i, const wchar_t* newName, const wchar_t* newId)
 		{
 			const Context* c = C (ctx);
@@ -1007,6 +1257,13 @@ SheetXL_Host MakeHost (Context* ctx)
 		h.GetDrawingCount = &GetDrawingCount;
 		h.GetDrawing = &GetDrawing;
 		h.SetDrawing = &SetDrawing;
+		h.GetSelectionCount = &GetSelectionCount;
+		h.GetSelectionItem = &GetSelectionItem;
+		h.FindDrawingIndex = &FindDrawingIndex;
+		h.CopyElementToLayout = &CopyElementToLayout;
+		h.GetElementPlacement = &GetElementPlacement;
+		h.GetElementTextParam = &GetElementTextParam;
+		h.SetElementTextParams = &SetElementTextParams;
 	return h;
 }
 

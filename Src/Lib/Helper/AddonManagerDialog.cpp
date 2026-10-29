@@ -16,13 +16,14 @@ namespace {
 	enum ControlId { ID_PATH = 100, ID_BROWSE, ID_LOAD, ID_LIST, ID_NAME, ID_STATUS, ID_RUN };
 
 	const wchar_t* const kClassName = L"AddonManagerDialogWnd";
-	const int kClientW = 540;
-	const int kClientH = 372;
+	const int kClientW = 620;
+	const int kClientH = 392;
 
 	struct State {
 		HWND		hwnd = nullptr;
 		HFONT		font = nullptr;
 		Selection*	selection = nullptr;
+		std::vector<CommandLoader::Command>	commands;	// same order as the list box
 		bool		done = false;
 		bool		accepted = false;
 	};
@@ -35,23 +36,6 @@ namespace {
 		GetWindowTextW (h, &s[0], len + 1);
 		s.resize (static_cast<size_t> (len));
 		return s;
-	}
-
-	// Tool names are ASCII. (wchar_t is an unsigned short typedef in this build: explicit casts.)
-	std::wstring Widen (const std::string& s)
-	{
-		std::wstring w;
-		for (char c : s)
-			w += static_cast<wchar_t> (static_cast<unsigned char> (c));
-		return w;
-	}
-
-	std::string Narrow (const std::wstring& s)
-	{
-		std::string n;
-		for (wchar_t c : s)
-			n += static_cast<char> (c);
-		return n;
 	}
 
 	HWND Make (State& st, const wchar_t* cls, const wchar_t* text, DWORD style, int x, int y, int w, int h, int id, DWORD exStyle = 0)
@@ -69,33 +53,49 @@ namespace {
 
 	void OnListSelection (State& st);
 
-	// Reads the DLL, fills the list. Keeps `keepName` selected when it is still there.
-	void LoadList (State& st, const std::string& keepName)
+	// Key of the selected command (kept selected across a Reload), else the remembered one.
+	std::wstring SelectedKey (const State& st)
+	{
+		const LRESULT idx = SendDlgItemMessageW (st.hwnd, ID_LIST, LB_GETCURSEL, 0, 0);
+		if (idx != LB_ERR && static_cast<size_t> (idx) < st.commands.size ())
+			return st.commands[static_cast<size_t> (idx)].key;
+		return st.selection->command;
+	}
+
+	// Loads a fresh copy of the add-on / DLL, fills the list. Keeps `keepKey` selected when it is still there.
+	void LoadList (State& st, const std::wstring& keepKey)
 	{
 		SendDlgItemMessageW (st.hwnd, ID_LIST, LB_RESETCONTENT, 0, 0);
+		st.commands.clear ();
 		const std::wstring path = GetText (st.hwnd, ID_PATH);
 		if (path.empty ()) {
-			SetStatus (st, L"Choose a Commands DLL (Browse...).");
+			SetStatus (st, L"Choose an add-on (.apx) or a Commands DLL (Browse...).");
 			return;
 		}
 
-		std::vector<std::string> names;
+		CommandLoader::ModuleInfo info;
 		std::wstring error;
-		if (!AddonManager::CommandLoader::ListCommands (path, names, error)) {
+		if (!CommandLoader::Inspect (path, info, error)) {
 			SetStatus (st, error);
 			return;
 		}
-		for (const std::string& n : names)
-			SendDlgItemMessageW (st.hwnd, ID_LIST, LB_ADDSTRING, 0, reinterpret_cast<LPARAM> (Widen (n).c_str ()));
+		st.commands = info.commands;
+		for (const CommandLoader::Command& c : st.commands)
+			SendDlgItemMessageW (st.hwnd, ID_LIST, LB_ADDSTRING, 0, reinterpret_cast<LPARAM> (c.label.c_str ()));
 
-		if (names.empty ()) {
-			SetStatus (st, L"Loaded. The DLL has no ListCommands export: type the command name.");
+		const std::wstring what = info.name.empty () ? info.kind : info.name + L" (" + info.kind + L")";
+		if (st.commands.empty ()) {
+			SetStatus (st, what + L": no command found. Type a tool name of the DLL.");
 			return;
 		}
-		SetStatus (st, std::to_wstring (names.size ()) + L" command(s). Double-click one to run it.");
-		const LRESULT idx = SendDlgItemMessageW (st.hwnd, ID_LIST, LB_FINDSTRINGEXACT, static_cast<WPARAM> (-1), reinterpret_cast<LPARAM> (Widen (keepName).c_str ()));
+		SetStatus (st, what + L": " + std::to_wstring (st.commands.size ()) + L" command(s). Double-click one to run it.");
+
 		// the remembered command, else the first one (so Enter works from the keyboard)
-		SendDlgItemMessageW (st.hwnd, ID_LIST, LB_SETCURSEL, idx != LB_ERR ? static_cast<WPARAM> (idx) : 0, 0);
+		size_t idx = 0;
+		for (size_t i = 0; i < st.commands.size (); ++i)
+			if (st.commands[i].key == keepKey)
+				idx = i;
+		SendDlgItemMessageW (st.hwnd, ID_LIST, LB_SETCURSEL, static_cast<WPARAM> (idx), 0);
 		OnListSelection (st);
 	}
 
@@ -108,37 +108,40 @@ namespace {
 		OPENFILENAMEW ofn = {};
 		ofn.lStructSize = sizeof (ofn);
 		ofn.hwndOwner = st.hwnd;
-		ofn.lpstrFilter = L"Commands DLL (*.dll)\0*.dll\0All files\0*.*\0";
+		ofn.lpstrFilter = L"Add-ons and Commands DLLs (*.apx;*.dll)\0*.apx;*.dll\0All files\0*.*\0";
 		ofn.lpstrFile = file;
 		ofn.nMaxFile = MAX_PATH;
-		ofn.lpstrTitle = L"Select a Commands DLL";
+		ofn.lpstrTitle = L"Select an add-on or a Commands DLL";
 		ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
 		if (GetOpenFileNameW (&ofn)) {
 			SetDlgItemTextW (st.hwnd, ID_PATH, file);
-			LoadList (st, "");
+			LoadList (st, L"");
 		}
 	}
 
 	void OnListSelection (State& st)
 	{
 		const LRESULT idx = SendDlgItemMessageW (st.hwnd, ID_LIST, LB_GETCURSEL, 0, 0);
-		if (idx == LB_ERR)
+		if (idx == LB_ERR || static_cast<size_t> (idx) >= st.commands.size ())
 			return;
-		wchar_t buf[256] = {};
-		SendDlgItemMessageW (st.hwnd, ID_LIST, LB_GETTEXT, static_cast<WPARAM> (idx), reinterpret_cast<LPARAM> (buf));
-		SetDlgItemTextW (st.hwnd, ID_NAME, buf);
+		SetDlgItemTextW (st.hwnd, ID_NAME, st.commands[static_cast<size_t> (idx)].label.c_str ());
 	}
 
 	void Accept (State& st)
 	{
 		const std::wstring path = GetText (st.hwnd, ID_PATH);
-		const std::wstring name = GetText (st.hwnd, ID_NAME);
-		if (path.empty () || name.empty ()) {
-			MessageBoxW (st.hwnd, L"Choose a DLL and a command first.", L"Add-in Manager", MB_OK | MB_ICONINFORMATION);
+		const std::wstring text = GetText (st.hwnd, ID_NAME);
+		if (path.empty () || text.empty ()) {
+			MessageBoxW (st.hwnd, L"Choose an add-on or a DLL, and a command first.", L"Add-in Manager", MB_OK | MB_ICONINFORMATION);
 			return;
 		}
-		st.selection->dllPath = path;
-		st.selection->toolName = Narrow (name);
+		// a command of the list, else a tool name typed for a Commands DLL
+		std::wstring key = L"run:" + text;
+		for (const CommandLoader::Command& c : st.commands)
+			if (c.label == text)
+				key = c.key;
+		st.selection->path = path;
+		st.selection->command = key;
 		st.accepted = true;
 		st.done = true;
 	}
@@ -146,20 +149,20 @@ namespace {
 	void CreateControls (State& st)
 	{
 		const DWORD tab = WS_TABSTOP;
-		Make (st, L"STATIC", L"Commands DLL (loaded from a temporary copy: you can rebuild it while Archicad runs):", SS_LEFT, 16, 14, 508, 18, -1);
-		Make (st, L"EDIT", st.selection->dllPath.c_str (), tab | ES_AUTOHSCROLL, 16, 36, 340, 24, ID_PATH, WS_EX_CLIENTEDGE);
-		Make (st, L"BUTTON", L"Browse...", BS_PUSHBUTTON | tab, 362, 35, 80, 26, ID_BROWSE);
-		Make (st, L"BUTTON", L"Reload", BS_PUSHBUTTON | tab, 448, 35, 76, 26, ID_LOAD);
+		Make (st, L"STATIC", L"Add-on (.apx) or Commands DLL, run from a temporary copy: rebuild it and Reload, no Archicad restart.", SS_LEFT, 16, 14, 588, 18, -1);
+		Make (st, L"EDIT", st.selection->path.c_str (), tab | ES_AUTOHSCROLL, 16, 36, 420, 24, ID_PATH, WS_EX_CLIENTEDGE);
+		Make (st, L"BUTTON", L"Browse...", BS_PUSHBUTTON | tab, 442, 35, 80, 26, ID_BROWSE);
+		Make (st, L"BUTTON", L"Reload", BS_PUSHBUTTON | tab, 528, 35, 76, 26, ID_LOAD);
 
 		Make (st, L"STATIC", L"Commands:", SS_LEFT, 16, 72, 200, 18, -1);
-		Make (st, L"LISTBOX", L"", WS_BORDER | WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | tab, 16, 92, 508, 160, ID_LIST);
+		Make (st, L"LISTBOX", L"", WS_BORDER | WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | tab, 16, 92, 588, 180, ID_LIST);
 
-		Make (st, L"STATIC", L"Command to run:", SS_LEFT, 16, 264, 200, 18, -1);
-		Make (st, L"EDIT", Widen (st.selection->toolName).c_str (), tab | ES_AUTOHSCROLL, 16, 284, 508, 24, ID_NAME, WS_EX_CLIENTEDGE);
+		Make (st, L"STATIC", L"Command to run:", SS_LEFT, 16, 284, 200, 18, -1);
+		Make (st, L"EDIT", L"", tab | ES_AUTOHSCROLL, 16, 304, 588, 24, ID_NAME, WS_EX_CLIENTEDGE);
 
-		Make (st, L"STATIC", L"", SS_LEFT, 16, 322, 300, 36, ID_STATUS);
-		Make (st, L"BUTTON", L"Run", BS_DEFPUSHBUTTON | tab, 338, 328, 90, 28, ID_RUN);
-		Make (st, L"BUTTON", L"Close", BS_PUSHBUTTON | tab, 434, 328, 90, 28, IDCANCEL);
+		Make (st, L"STATIC", L"", SS_LEFT, 16, 342, 390, 40, ID_STATUS);
+		Make (st, L"BUTTON", L"Run", BS_DEFPUSHBUTTON | tab, 418, 348, 90, 28, ID_RUN);
+		Make (st, L"BUTTON", L"Close", BS_PUSHBUTTON | tab, 514, 348, 90, 28, IDCANCEL);
 	}
 
 	LRESULT CALLBACK WndProc (HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -176,7 +179,7 @@ namespace {
 					case IDCANCEL:	if (HIWORD (wp) == BN_CLICKED) st->done = true;	break;
 					case ID_RUN:	if (HIWORD (wp) == BN_CLICKED) Accept (*st);	break;
 					case ID_BROWSE:	if (HIWORD (wp) == BN_CLICKED) Browse (*st);	break;
-					case ID_LOAD:	if (HIWORD (wp) == BN_CLICKED) LoadList (*st, Narrow (GetText (st->hwnd, ID_NAME)));	break;
+					case ID_LOAD:	if (HIWORD (wp) == BN_CLICKED) LoadList (*st, SelectedKey (*st));	break;
 					case ID_LIST:
 						if (HIWORD (wp) == LBN_SELCHANGE)
 							OnListSelection (*st);
@@ -244,14 +247,18 @@ bool Show (Selection& selection)
 	}
 
 	CreateControls (st);
-	LoadList (st, selection.toolName);
+	LoadList (st, selection.command);
 	if (owner != nullptr)
 		EnableWindow (owner, FALSE);
 	ShowWindow (st.hwnd, SW_SHOW);
 	SetFocus (GetDlgItem (st.hwnd, ID_LIST));
 
-	// Own loop: PostQuitMessage would end the message loop of Archicad itself
+	// Keys still queued from the menu choice (the Enter that picked "Manual Mode") would press Run at once
 	MSG msg;
+	while (PeekMessageW (&msg, nullptr, WM_KEYFIRST, WM_KEYLAST, PM_REMOVE))
+		;
+
+	// Own loop: PostQuitMessage would end the message loop of Archicad itself
 	while (!st.done && GetMessageW (&msg, nullptr, 0, 0) > 0) {
 		if (!IsDialogMessageW (st.hwnd, &msg)) {
 			TranslateMessage (&msg);

@@ -1,5 +1,6 @@
 #include "APIEnvir.h"
 #include "ACAPinc.h"
+#include "Lib/Execute/CommandLoader.hpp"
 #include "Lib/System/ConstantsAndMessages.hpp"
 #include "Panels/Panel_Manager.hpp"
 
@@ -26,6 +27,7 @@ namespace {
 	GSErrCode __ACENV_CALL MenuCommandHandler (const API_MenuParams* menuParams)
 	{
 		Trace ("menu command", menuParams->menuItemRef.itemIndex);
+		ACAPI_KeepInMemory (true);	// renewed at every call (see Initialize)
 		if (menuParams->menuItemRef.menuResID == ConstantsAndMessages::MENU_STRINGS_MANUAL)
 			Panels::Panel_Manager_HandleMenuItem (ConstantsAndMessages::MENU_MANAGER_MANUAL);
 		else if (menuParams->menuItemRef.menuResID == ConstantsAndMessages::MENU_STRINGS_FACELESS)
@@ -55,6 +57,9 @@ GSErrCode __ACENV_CALL RegisterInterface (void)
 
 GSErrCode __ACENV_CALL Initialize (void)
 {
+	// Stay loaded: Archicad would otherwise unload the manager after each command, and with it the add-on under
+	// test (windows or callbacks that add-on left behind would point into freed code).
+	ACAPI_KeepInMemory (true);
 	GSErrCode err = ACAPI_MenuItem_InstallMenuHandler (ConstantsAndMessages::MENU_STRINGS_MANUAL, MenuCommandHandler);
 	if (err == NoError)
 		err = ACAPI_MenuItem_InstallMenuHandler (ConstantsAndMessages::MENU_STRINGS_FACELESS, MenuCommandHandler);
@@ -65,5 +70,6 @@ GSErrCode __ACENV_CALL Initialize (void)
 GSErrCode __ACENV_CALL FreeData (void)
 {
 	Trace ("FreeData");
+	CommandLoader::UnloadAll ();
 	return NoError;
 }

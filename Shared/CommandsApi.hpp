@@ -76,6 +76,26 @@ struct SheetXL_Host {
 	int  (__cdecl *GetDrawing) (void* ctx, int layoutIndex, int drawingIndex, wchar_t* name, int nameCap, wchar_t* key, int keyCap, double* v);
 	// flags: 1 = position (with anchor and model offset), 2 = scale ratio, 4 = rotation; `v` laid out as in GetDrawing.
 	int  (__cdecl *SetDrawing) (void* ctx, int layoutIndex, int drawingIndex, const double* v, unsigned int flags);
+	// ---- Copy Views (View panel) ----
+
+	// Selection of the open window (snapshot taken by the call). Returns the number of selected elements, -1 on error.
+	// layoutIndex = position in the GetLayoutInfo list when the window is a layout, -1 otherwise.
+	int  (__cdecl *GetSelectionCount) (void* ctx, int* layoutIndex);
+	// Element `index` of that selection: its GUID (text) and element type (API_ElemTypeID value). Returns 0 or an Archicad error code.
+	int  (__cdecl *GetSelectionItem) (void* ctx, int index, wchar_t* guid, int guidCap, int* typeId);
+	// Position of the drawing element `guid` in the GetDrawing list of the layout, -1 = not a drawing of that layout.
+	int  (__cdecl *FindDrawingIndex) (void* ctx, int layoutIndex, const wchar_t* guid);
+	// Copies any element (geometry, memo and all) from layout srcLayoutIndex to the same place on layout dstLayoutIndex. Undoable.
+	// Drawings are refreshed after the copy. Returns 0 or an Archicad error code.
+	int  (__cdecl *CopyElementToLayout) (void* ctx, int srcLayoutIndex, const wchar_t* guid, int dstLayoutIndex);
+	// ---- Element access in any window (Auto Change Grid Name) ----
+
+	// Insertion point (m) and angle (rad) of an object-type element of the last selection snapshot: v = x, y, angle. Returns 0 or an Archicad error code.
+	int  (__cdecl *GetElementPlacement) (void* ctx, const wchar_t* guid, double* v);
+	// Value of the GDL string parameter `name` of a library-part element of the last selection snapshot. Returns 0, or an error code when there is no such parameter.
+	int  (__cdecl *GetElementTextParam) (void* ctx, const wchar_t* guid, const wchar_t* name, wchar_t* value, int cap);
+	// Sets a GDL string parameter on each of `count` elements (guids[i], names[i], values[i]) in ONE undoable step. Returns 0 or an Archicad error code.
+	int  (__cdecl *SetElementTextParams) (void* ctx, int count, const wchar_t* const* guids, const wchar_t* const* names, const wchar_t* const* values);
 };
 
 // Smallest `size` a UI add-on may report: the table up to CreateLayout (what the first command needs).
