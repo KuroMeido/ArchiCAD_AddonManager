@@ -1,4 +1,4 @@
-﻿# Shared by UI/ and Commands/: discovers Archicad DevKits and creates one configuration per version
+﻿# Shared by pyArchiCAD_UI, pyArchiCAD_Cmd and ArchiCAD_AddonManager (one copy each): discovers Archicad DevKits and creates one configuration per version
 # (Debug-AC<NN> / Release-AC<NN>). Include BEFORE project(), then call ac_apply_versions(<target> <base name>).
 #
 # Options (cache):
@@ -90,6 +90,31 @@ function (ac_apply_versions target base_name)
 			endforeach ()
 		endforeach ()
 	endforeach ()
+endfunction ()
+
+# Visual Studio generator: also writes <solution folder>/<solution>.slnx, like a .sln next to its project folder;
+# the project itself stays in the build folder (build-vs/<target>), rewritten by every configure.
+function (ac_write_root_solution target)
+	if (NOT CMAKE_GENERATOR MATCHES "^Visual Studio")
+		return ()
+	endif ()
+	get_target_property (targetBinDir ${target} BINARY_DIR)
+	file (RELATIVE_PATH buildRel "${CMAKE_SOURCE_DIR}" "${targetBinDir}")
+	set (slnConfigs "")
+	foreach (cfg ${CMAKE_CONFIGURATION_TYPES})
+		string (APPEND slnConfigs "\t\t<BuildType Name=\"${cfg}\"/>\n")
+	endforeach ()
+	set (vcxType "8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942")	# C++ project: the IDE needs it, MSBuild guesses it
+	file (CONFIGURE OUTPUT "${CMAKE_SOURCE_DIR}/${CMAKE_PROJECT_NAME}.slnx" @ONLY CONTENT
+"<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!-- Written by CMakeLists.txt (configure preset ac27-vs): edit CMake, not this file. -->
+<Solution>
+	<Configurations>
+@slnConfigs@		<Platform Name=\"x64\"/>
+	</Configurations>
+	<Project Path=\"@buildRel@/@target@.vcxproj\" Type=\"@vcxType@\" DefaultStartup=\"true\"/>
+</Solution>
+")
 endfunction ()
 
 

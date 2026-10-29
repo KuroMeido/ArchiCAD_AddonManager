@@ -1,5 +1,5 @@
 #include "APIEnvir.h"
-#include "Lib/Helper/AddonManagerDialog.hpp"
+#include "PresentationWPF/Views/Manager/AddonManagerDialog.hpp"
 
 #include "Lib/Execute/CommandLoader.hpp"
 

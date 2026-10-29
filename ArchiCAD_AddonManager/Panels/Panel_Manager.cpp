@@ -3,7 +3,7 @@
 #include "Panels/Panel_Manager.hpp"
 
 #include "Lib/Execute/CommandLoader.hpp"
-#include "Lib/Helper/AddonManagerDialog.hpp"
+#include "PresentationWPF/Views/Manager/AddonManagerDialog.hpp"
 #include "Lib/System/ConstantsAndMessages.hpp"
 
 #include <shlobj.h>

@@ -1,4 +1,4 @@
-﻿{
+{
   "version": 6,
   "configurePresets": [
     {
@@ -13,7 +13,7 @@
       "name": "ac27-vs-base",
       "hidden": true,
       "displayName": "Archicad 27 (Visual Studio 2026 solution, v142)",
-      "description": "Writes build-vs/ArchiCAD_AddonManager.sln. Archicad 26-28 DevKits need the v142 toolset (MSVC 14.29).",
+      "description": "Writes build-vs/ and ArchiCAD_AddonManager.slnx at the root. Archicad 26-28 DevKits need the v142 toolset (MSVC 14.29).",
       "generator": "Visual Studio 18 2026",
       "architecture": "x64",
       "toolset": "v142",
