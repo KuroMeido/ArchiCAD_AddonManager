@@ -12,12 +12,24 @@
     {
       "name": "ac27-vs-base",
       "hidden": true,
+      "displayName": "Archicad 27 (Visual Studio 2022 solution, v142)",
+      "description": "Writes build-vs/ and ArchiCAD_AddonManager.slnx at the root. The Archicad 26-28 DevKits only compile with the v142 toolset (MSVC 14.29): install MSVC v142 - VS 2019 C++ x64/x86 build tools in the Visual Studio 2022 installer (Individual components). ac27-vs2026 is the same for Visual Studio 2026.",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "toolset": "v142",
+      "cacheVariables": { "AC_PLATFORM_TOOLSET": "v142" },
+      "binaryDir": "${sourceDir}/build-vs",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "ac27-vs2026",
       "displayName": "Archicad 27 (Visual Studio 2026 solution, v142)",
-      "description": "Writes build-vs/ and ArchiCAD_AddonManager.slnx at the root. Archicad 26-28 DevKits need the v142 toolset (MSVC 14.29).",
+      "description": "Writes build-vs2026/ and the root .slnx for Visual Studio 2026 with the DevKit's own v142 toolset.",
       "generator": "Visual Studio 18 2026",
       "architecture": "x64",
       "toolset": "v142",
-      "binaryDir": "${sourceDir}/build-vs",
+      "cacheVariables": { "AC_PLATFORM_TOOLSET": "v142" },
+      "binaryDir": "${sourceDir}/build-vs2026",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     }
   ]

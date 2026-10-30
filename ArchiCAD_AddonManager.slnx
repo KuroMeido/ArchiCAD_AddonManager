@@ -1,10 +1,10 @@
-
-<!-- Written by CMakeLists.txt (configure preset ac27-vs): edit CMake, not this file. -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Written by CMakeLists.txt (configure preset ac27-vs / ac27-vs2026): edit CMake, not this file. -->
 <Solution>
 	<Configurations>
-		<BuildType Name="Debug-AC27" />
-		<BuildType Name="Release-AC27" />
-		<Platform Name="x64" />
+		<BuildType Name="Debug-AC27"/>
+		<BuildType Name="Release-AC27"/>
+		<Platform Name="x64"/>
 	</Configurations>
-	<Project Path="build-vs/ArchiCAD_AddonManager/ArchiCAD_AddonManager.vcxproj" Id="e6a2840a-19ad-365e-a908-c1afe0ea3d0c" />
+	<Project Path="build-vs/ArchiCAD_AddonManager/ArchiCAD_AddonManager.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" DefaultStartup="true"/>
 </Solution>
