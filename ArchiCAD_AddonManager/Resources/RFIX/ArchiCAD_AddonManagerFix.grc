@@ -3,6 +3,6 @@
 	// Test IDs only. Request a real Developer ID / Local ID from Graphisoft before distributing.
 	// Local ID differs from pyAtlas (MDID_APICD_NavigatorTest = 304) so both add-ons load together;
 	// 777 is not used by any MDID_APICD_* test ID of the DevKit.
-	MDID_APICD
-	777
+	1128492130
+	854744675
 }
