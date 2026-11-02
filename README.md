@@ -132,7 +132,8 @@ to do some work in step 3; it was only run for 27.
    versions renamed or changed some functions, and the compiler will point them out. `Lib/Execute/ArchicadHostHelper.cpp`
    is where most of them are.
 
-5. **Developer ID.** Use a Developer ID / Local ID of your own (see [Limitations](#limitations-and-warnings)).
+5. **Developer ID.** Use a Developer ID / Local ID of your own (see [Limitations](#limitations-and-warnings)); Graphisoft may
+   assign IDs per Archicad version, check yours.
 
 Pull requests that add a version are welcome, as long as the constants in step 3 come with how they were measured.
 
@@ -161,8 +162,9 @@ so its `ACAPI_*` calls are accepted as if they came from a registered add-on. Th
   keeps static state across runs sees a fresh copy each time.
 - Add-ons that register file types, palettes or other persistent integrations are not a good fit: they are meant to be
   installed by Archicad at startup.
-- **Developer ID.** `Resources/RFIX/ArchiCAD_AddonManagerFix.grc` uses the DevKit's *test* IDs. Request your own Developer
-  ID and Local ID from Graphisoft before you distribute a built `.apx`.
+- **Developer ID.** `Resources/RFIX/ArchiCAD_AddonManagerFix.grc` holds the author's Developer ID and Local ID. If you fork
+  this project or distribute your own build, replace both with the IDs Graphisoft assigned to you: two add-ons with the
+  same IDs conflict in Archicad. For local experiments only you can use the DevKit's test IDs (`MDIDs_APICD.h`).
 
 ## Disclaimer
 
