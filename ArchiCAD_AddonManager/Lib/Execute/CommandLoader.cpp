@@ -396,8 +396,10 @@ namespace {
 			exp.freeData ();
 		}
 		initialized = false;
-		if (mod != nullptr)
-			FreeLibrary (mod);
+		// The copy is deliberately NOT unloaded (no FreeLibrary): an add-on can leave work behind that runs its code later,
+		// such as a thread, a timer or a message posted to Archicad's main thread. Unloading it crashes Archicad (seen with
+		// Tapir: GS::MessageTarget::ProcessRunnableMessage reading freed code). It stays mapped until Archicad exits; its
+		// files are deleted when possible, otherwise by DeleteStaleCopies in the next session.
 		mod = nullptr;
 		if (!tmpDir.empty ())
 			DeleteTree (tmpDir);

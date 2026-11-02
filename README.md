@@ -32,6 +32,27 @@ The manager adds one tab to Archicad's menu bar with two items:
 
 The last selection is stored in `%APPDATA%\AddonManager\AddonManager.ini`.
 
+![Add-in Manager window with Navigator_Test loaded](docs/manager-window.png)
+
+## Tested add-ons
+
+Tested on Archicad 27 with the add-on built from the DevKit examples. Results are what was actually observed; empty
+rows are not tested yet.
+
+| Add-on | Source | Loads | Commands listed | Commands run | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `Navigator_Test` | `Examples\Navigator_Test` in the DevKit 27.6003 (built with MSVC v142, Release) | Yes | 3: *Open Navigator Test*, *Create child Group...*, *Clone Project map item to View map* | Not tested yet | It also registers palettes and Navigator callbacks, which the manager does not install, so some of its features may not work. |
+| `pyAtlas_Cmd_AC27.dll` (Commands DLL) | author's own | Yes | Yes | Yes (reload without restarting) | |
+| Third-party service add-ons (e.g. Tapir) | not a good fit | | | | Loading one caused a crash; the manager now never unloads a module, which should avoid it, but this is not verified. |
+
+How to repeat a test case:
+
+1. Build the add-on you want to test (for a DevKit example: copy its folder, build with the v142 toolset).
+2. Open a fresh demo project and save it first.
+3. **Add-in Manager (Manual Mode)...**, pick the `.apx`, check that its commands appear in the list.
+4. Run each command, then rebuild the add-on, press **Reload** and run it again (twice or more, to check the reload).
+5. Record the result in the table above.
+
 ## Typical workflow
 
 1. Build your add-on (or Commands DLL).
