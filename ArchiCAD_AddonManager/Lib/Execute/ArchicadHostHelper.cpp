@@ -160,20 +160,6 @@ namespace {
 		// "%s": the text itself must never be interpreted as a printf format
 		const GS::UniString message = ToUni (text);
 		ACAPI_WriteReport ("%s", true, message.ToCStr (CC_UTF8).Get ());
-
-		// the last report is also kept in a text file (the Archicad alert is easy to miss): %TEMP%\pyAtlas_report.txt
-		wchar_t path[MAX_PATH] = {};
-		if (GetTempPathW (MAX_PATH, path) != 0) {
-			const std::wstring file = std::wstring (path) + L"pyAtlas_report.txt";
-			HANDLE h = CreateFileW (file.c_str (), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-			if (h != INVALID_HANDLE_VALUE) {
-				const auto utf8Str = message.ToCStr (CC_UTF8);
-				const char* utf8 = utf8Str.Get ();
-				DWORD written = 0;
-				WriteFile (h, utf8, static_cast<DWORD> (std::strlen (utf8)), &written, nullptr);
-				CloseHandle (h);
-			}
-		}
 	}
 
 	int __cdecl GetDiagnostics (void* ctx, wchar_t* buf, int cap)	{ return CopyOut (C (ctx)->diagnostics, buf, cap); }
